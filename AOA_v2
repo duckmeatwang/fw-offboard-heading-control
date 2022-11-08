@@ -1,0 +1,79 @@
+import math
+import numpy as np
+
+class AOA:
+      def AOA_v1(self, x, y, z, phi, theta, psi, P_img_x, P_img_y, P_img_z):
+          # uav pose
+          R_x = [[1, 0, 0],[0, math.cos(phi), -math.sin(phi)],[0, math.sin(phi), math.cos(phi)]]
+          R_y = [[math.cos(theta), 0, -math.sin(theta)], [0, 1, 0], [math.sin(theta), 0, math.cos(theta)]]
+          R_z = [[math.cos(psi), -math.sin(psi), 0], [math.sin(psi), math.cos(psi), 0], [0, 0, 1]]
+
+          R_1 = np.matmul(R_x,R_y)
+          R = np.matmul(R_1, R_z)
+          #print(R)
+          inv_R = np.linalg.inv(R)
+          #print("inv_R = " , inv_R)
+          
+          T = [[P_img_x], [P_img_y], [P_img_z]]
+          norm_T = np.linalg.norm(T)
+          #print("T = ")
+          #print(T)
+          #print("norm_T = ")
+          #print(norm_T)
+
+          # camera pose
+          R_x = [[1, 0, 0],[0, 1, 0],[0, 0, 1]]
+          R_y = [[math.cos(30), 0, -math.sin(30)],[0, 1, 0],[math.sin(30), 0, math.cos(30)]]
+          R_z = [[math.cos(90), -math.sin(90), 0],[math.sin(90), math.cos(90), 0],[0, 0, 1]]
+          R = np.matmul(R_y, R_z)
+          #print(R)
+        
+          T_add = np.matmul(R,T)
+          norm_T_add = np.linalg.norm(T_add)
+
+          L_r = [0, 0, 1]
+          #print("L_r = ")
+          #print(L_r)
+          T_add_norm = T_add/norm_T_add
+          #print("T_add_norm = ")
+          #print(T_add_norm)
+          L_s = np.matmul(inv_R,T_add_norm) # target position vector in world coordinate
+          #d = abs(z)/(np.dot(L_r, L_s)) #scalar
+          d = abs(z)/(np.dot(L_r, L_s)) #scalar
+          #print("z = " , z)
+          #print("L_s = " , L_s)
+          #print("d = " , d)
+
+          ## Method_1 
+          P_world = np.matmul(L_s, d)
+          #print("target position vector = ")
+          #print(P_world)
+
+          Target_position_world_x = P_world[0] + x  #N
+          Target_position_world_y = P_world[1] + y  #E 
+          Target_position_world_z = P_world[2] + z  #D 
+          #Target_position_world = [Target_position_world_x, Target_position_world_y, Target_position_world_z]
+
+          ## Method_2 
+          Target_position_vector_x = L_s[0]
+          Target_position_vector_y = L_s[1]
+          Target_position_vector_z = L_s[2]
+          #Target_position_vector = [Target_position_vector_x, Target_position_vector_y, Target_position_vector_z]
+      
+          # a = azimuth angle / e = elevation angle
+          a_w = np.arctan2(Target_position_world_y-y, Target_position_world_x-x)
+          a = np.arctan2(Target_position_vector_y, Target_position_vector_x)
+
+          e_w = np.arctan2(np.sqrt(np.square(Target_position_world_x - x) + np.square(Target_position_world_y - y)), Target_position_world_z - z)
+          e = np.arctan2(np.sqrt(np.square(Target_position_vector_x) + np.square(Target_position_vector_y)), Target_position_vector_z)
+
+          lamda = abs(z)/np.cos(e_w)
+          #print('lamda = ')
+          #print(lamda)
+          e_x = P_world[0]*lamda + x
+          e_y = P_world[1]*lamda + y
+          e_z = P_world[2] + z
+          #print('e_x, e_y, e_z = ')
+          #print(e_x, e_y, e_z)
+     
+          return a_w, e_w, a, e, Target_position_world_x, Target_position_world_y, Target_position_world_z, Target_position_vector_x, Target_position_vector_y, Target_position_vector_z, lamda
