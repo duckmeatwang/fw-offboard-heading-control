@@ -1,0 +1,61 @@
+import math
+import numpy as np
+
+class path_planning :
+    def next_position (self, a, b) : # a = azimuth b = estimated target position
+        next_position = []
+        theta = [90, 135, 180, 225, 270, 315]
+        dd = [10, 20, 30, 40, 50]
+
+        a_i = np.tan(a)
+        #b[2]
+        
+        #print(b)
+        
+        for j in range(5):
+                for i in range(6):
+
+                    beta = theta[i] + a_i
+                    beta_rad = beta * np.pi/180
+                    tanb = np.tan(beta_rad)
+
+                    gamma = 270- theta[i] -a_i
+                    gamma_rad = gamma * np.pi/180
+
+                    N = b[0] + dd[j]*np.cos(gamma_rad)  
+                    E = b[1] + dd[j]*np.sin(gamma_rad)
+
+                    next_position.append([N, E, b[2]])
+
+
+        return next_position
+
+
+    def calculate_dop(self, a, b, c):  # a=current position b=next position c=estimated position
+        #print('--------------------')
+        #print(a, b)
+        r_1 = np.square(c[0]-a[0])+np.square(c[1]-a[1])
+        br_1 = np.square(c[0]-a[0])+np.square(c[1]-a[1])+np.square(c[2]-a[2])
+
+        r_2 = np.square(c[0]-b[0])+np.square(c[1]-b[1])
+        br_2 = np.square(c[0]-b[0])+np.square(c[1]-b[1])+np.square(c[2]-b[2])
+
+        H2 = [[-(c[1]-a[1])/r_1, (c[0]-a[0])/r_1, 0],[-(c[1]-b[1])/r_2, (c[0]-b[0])/r_2, 0]]
+        H3 = [[((c[0]-a[0])*(c[2]-a[2]))/(br_1*np.sqrt(r_1)),((c[1]-a[1])*(c[2]-a[2]))/(br_1*np.sqrt(r_1)), -(np.sqrt(r_1)/np.sqrt(br_1))],[((c[0]-b[0])*(c[2]-b[2]))/(br_2*np.sqrt(r_2)),((c[1]-b[1])*(c[2]-b[2]))/(br_2*np.sqrt(r_2)), -(np.sqrt(r_2)/np.sqrt(br_2))]]
+        H2.append(H3[0])
+        H2.append(H3[1])
+        H = H2
+        #print("H = ")
+        #print(H)
+
+        Q = np.matmul(np.transpose(H), H)
+        #print("Q = ")
+        #print(Q)
+        #print("trace Q = ")
+        #print(np.trace(Q))
+        GDOP = np.sqrt(np.trace(Q))
+
+        #print("GDOP = ")
+        #print(GDOP)
+        #print('--------------------')
+        return GDOP
