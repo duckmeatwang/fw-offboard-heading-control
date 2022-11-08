@@ -1,0 +1,206 @@
+# on Gazebo
+
+#! /usr/bin/env python
+
+import rospy
+from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped, TwistStamped
+from nav_msgs.msg import Odometry
+from mavros_msgs.msg import State, AttitudeTarget
+from mavros_msgs.srv import CommandBool, CommandBoolRequest, SetMode, SetModeRequest
+from mavros_msgs.msg import PositionTarget
+import numpy as np
+import tf
+
+import cubic_spline 
+
+current_state = State()
+
+def state_cb(msg):
+    global current_state
+    current_state = msg
+
+def gps_callback(msg):
+    global gps_msg
+    gps_msg = msg
+
+class offb_hdg(object):
+     def next_waypoint():
+
+        state_sub = rospy.Subscriber("/plane_cam_0/mavros/state", State, callback = state_cb)
+        position_sub = rospy.Subscriber("/plane_cam_0/mavros/global_position/local", Odometry, gps_callback)
+
+        local_pos_pub = rospy.Publisher("/plane_cam_0/mavros/setpoint_position/local", PoseStamped, queue_size=10)
+
+        attitude_pub = rospy.Publisher("/plane_cam_0/mavros/setpoint_raw/attitude", AttitudeTarget, queue_size=1)
+    
+        rospy.wait_for_service("/plane_cam_0/mavros/cmd/arming")
+        arming_client = rospy.ServiceProxy("plane_cam_0/mavros/cmd/arming", CommandBool)    
+
+        rospy.wait_for_service("/plane_cam_0/mavros/set_mode")
+        set_mode_client = rospy.ServiceProxy("plane_cam_0/mavros/set_mode", SetMode)
+   
+        setpoint_pub = rospy.Publisher("/plane_cam_0/mavros/setpoint_raw/local", PositionTarget, queue_size=1)
+    
+
+        # Setpoint publishing MUST be faster than 2Hz
+        rate = rospy.Rate(20)
+
+        # Wait for Flight Controller connection
+        while(not rospy.is_shutdown() and not current_state.connected):
+            rate.sleep()
+
+        pose = PoseStamped()
+        setpoint = PositionTarget()
+        set_attitude = AttitudeTarget()
+
+        roll = 1
+        pitch = 0
+        yaw = 5
+        
+        quat = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+
+        # set_attitude.body_rate.x = 0
+        # set_attitude.body_rate.y = 0
+        # set_attitude.body_rate.z = 10
+        set_attitude.orientation.x = quat[0]
+        set_attitude.orientation.y = quat[1]
+        set_attitude.orientation.z = quat[2]
+        set_attitude.orientation.w = quat[3]
+        set_attitude.thrust = 0.3
+        pose.pose.position.z = 100
+
+
+       # Send a few setpoints before starting
+        for i in range(100):   
+            if(rospy.is_shutdown()):
+                break
+
+            attitude_pub.publish(set_attitude)
+            local_pos_pub.publish(pose)
+            rate.sleep()
+
+        offb_set_mode = SetModeRequest()
+        offb_set_mode.custom_mode = 'OFFBOARD'
+
+        arm_cmd = CommandBoolRequest()
+        arm_cmd.value = True
+
+        last_req = rospy.Time.now()
+
+
+        while(not rospy.is_shutdown()):
+            if(current_state.mode != "OFFBOARD" and (rospy.Time.now() - last_req) > rospy.Duration(5.0)):
+                if(set_mode_client.call(offb_set_mode).mode_sent == True):
+                    rospy.loginfo("OFFBOARD enabled")
+            
+                last_req = rospy.Time.now()
+            else:
+                # set_attitude.body_rate.x = 0
+                # set_attitude.body_rate.y = 0
+                # set_attitude.body_rate.z = 10
+                set_attitude.orientation.x = quat[0]
+                set_attitude.orientation.y = quat[1]
+                set_attitude.orientation.z = quat[2]
+                set_attitude.orientation.w = quat[3]
+                set_attitude.thrust = 0.3
+                pose.pose.position.z = 100
+
+                attitude_pub.publish(set_attitude)
+                local_pos_pub.publish(pose)
+
+
+            attitude_pub.publish(set_attitude)
+            local_pos_pub.publish(pose)
+
+            rate.sleep()
+
+if __name__ == "__main__":
+    rospy.init_node("offb_fpos_py")
+
+    state_sub = rospy.Subscriber("/plane_cam_0/mavros/state", State, callback = state_cb)
+    position_sub = rospy.Subscriber("/plane_cam_0/mavros/global_position/local", Odometry, gps_callback)
+
+    local_pos_pub = rospy.Publisher("/plane_cam_0/mavros/setpoint_position/local", PoseStamped, queue_size=10)
+    attitude_pub = rospy.Publisher("/plane_cam_0/mavros/setpoint_raw/attitude", AttitudeTarget, queue_size=1)
+    
+    rospy.wait_for_service("/plane_cam_0/mavros/cmd/arming")
+    arming_client = rospy.ServiceProxy("plane_cam_0/mavros/cmd/arming", CommandBool)    
+
+    rospy.wait_for_service("/plane_cam_0/mavros/set_mode")
+    set_mode_client = rospy.ServiceProxy("plane_cam_0/mavros/set_mode", SetMode)
+
+    setpoint_pub = rospy.Publisher("/plane_cam_0/mavros/setpoint_raw/local", PositionTarget, queue_size=1)
+    velocity_pub = rospy.Publisher("/plane_cam_0/mavros/setpoint_attitude/cmd_vel", TwistStamped, queue_size=1)
+    
+
+    # Setpoint publishing MUST be faster than 2Hz
+    rate = rospy.Rate(20)
+
+    # Wait for Flight Controller connection
+    while(not rospy.is_shutdown() and not current_state.connected):
+        rate.sleep()
+
+    pose = PoseStamped()
+    setpoint = PositionTarget()
+    set_attitude = AttitudeTarget()
+
+    roll = 1
+    pitch = 0
+    yaw = 5
+        
+    quat = tf.transformations.quaternion_from_euler(roll, pitch, yaw)
+
+    # set_attitude.body_rate.x = 0
+    # set_attitude.body_rate.y = 0
+    # set_attitude.body_rate.z = 10
+    set_attitude.orientation.x = quat[0]
+    set_attitude.orientation.y = quat[1]
+    set_attitude.orientation.z = quat[2]
+    set_attitude.orientation.w = quat[3]
+    set_attitude.thrust = 0.3
+    pose.pose.position.z = 100
+
+
+    # Send a few setpoints before starting
+    for i in range(100):   
+        if(rospy.is_shutdown()):
+            break
+
+        attitude_pub.publish(set_attitude)
+        local_pos_pub.publish(pose)
+        rate.sleep()
+
+    offb_set_mode = SetModeRequest()
+    offb_set_mode.custom_mode = 'OFFBOARD'
+
+    arm_cmd = CommandBoolRequest()
+    arm_cmd.value = True
+
+    last_req = rospy.Time.now()
+
+
+    while(not rospy.is_shutdown()):
+        if(current_state.mode != "OFFBOARD" and (rospy.Time.now() - last_req) > rospy.Duration(5.0)):
+            if(set_mode_client.call(offb_set_mode).mode_sent == True):
+                rospy.loginfo("OFFBOARD enabled")
+            
+            last_req = rospy.Time.now()
+        else:
+            # set_attitude.body_rate.x = 0
+            # set_attitude.body_rate.y = 0
+            # set_attitude.body_rate.z = 10
+            set_attitude.orientation.x = quat[0]
+            set_attitude.orientation.y = quat[1]
+            set_attitude.orientation.z = quat[2]
+            set_attitude.orientation.w = quat[3]
+            set_attitude.thrust = 0.3
+            pose.pose.position.z = 100
+                
+            attitude_pub.publish(set_attitude)
+            local_pos_pub.publish(pose)
+
+
+        attitude_pub.publish(set_attitude)
+        local_pos_pub.publish(pose)
+
+        rate.sleep()
